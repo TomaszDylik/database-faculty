@@ -1,0 +1,39 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum ConversationStatus {
+  ACTIVE
+  ARCHIVED
+}
+
+model User {
+  id                   String         @id @default(uuid()) @db.Uuid
+  email                String         @unique @db.VarChar(255)
+  displayName          String         @map("display_name") @db.VarChar(120)
+  createdAt            DateTime       @default(now()) @map("created_at")
+  updatedAt            DateTime       @updatedAt @map("updated_at")
+  createdConversations Conversation[] @relation("ConversationCreator")
+
+  @@map("users")
+}
+
+model Conversation {
+  id            String             @id @default(uuid()) @db.Uuid
+  title         String             @db.VarChar(255)
+  createdById   String?            @map("created_by_id") @db.Uuid
+  status        ConversationStatus @default(ACTIVE)
+  lastMessageAt DateTime?          @map("last_message_at")
+  createdAt     DateTime           @default(now()) @map("created_at")
+  updatedAt     DateTime           @updatedAt @map("updated_at")
+  createdBy     User?              @relation("ConversationCreator", fields: [createdById], references: [id], onDelete: SetNull)
+
+  @@index([createdById])
+  @@index([status])
+  @@map("conversations")
+}
