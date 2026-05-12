@@ -1,0 +1,13 @@
+{
+  "name": "database-faculty",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Mikroserwisowy backend czatu z PostgreSQL i MongoDB",
+  "scripts": {
+    "compose:up": "docker compose up --build",
+    "compose:down": "docker compose down",
+    "compose:logs": "docker compose logs -f",
+    "db:pg:setup": "npm --prefix services/service-pg run db:setup",
+    "db:pg:seed": "npm --prefix services/service-pg run knex:seed"
+  }
+}
