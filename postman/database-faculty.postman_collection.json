@@ -1,0 +1,147 @@
+{
+  "info": {
+    "_postman_id": "8fce30d2-685d-4cc9-ae03-c4d9193b4f7b",
+    "name": "database-faculty backend",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "description": "Kolekcja do testowania aktualnych endpointow backendu projektu database-faculty."
+  },
+  "variable": [
+    {
+      "key": "gatewayBaseUrl",
+      "value": "http://localhost:8080"
+    },
+    {
+      "key": "servicePgBaseUrl",
+      "value": "http://localhost:8081"
+    },
+    {
+      "key": "serviceMongoBaseUrl",
+      "value": "http://localhost:8082"
+    }
+  ],
+  "item": [
+    {
+      "name": "API Gateway",
+      "item": [
+        {
+          "name": "GET gateway root",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{gatewayBaseUrl}}/",
+              "host": [
+                "{{gatewayBaseUrl}}"
+              ],
+              "path": [
+                ""
+              ]
+            },
+            "description": "Podstawowy opis gatewaya i lista tras."
+          },
+          "response": []
+        },
+        {
+          "name": "GET gateway health",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{gatewayBaseUrl}}/health",
+              "host": [
+                "{{gatewayBaseUrl}}"
+              ],
+              "path": [
+                "health"
+              ]
+            },
+            "description": "Sprawdza stan gatewaya i probe'uje service-pg oraz service-mongo."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "service-pg",
+      "item": [
+        {
+          "name": "GET service-pg root",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{servicePgBaseUrl}}/",
+              "host": [
+                "{{servicePgBaseUrl}}"
+              ],
+              "path": [
+                ""
+              ]
+            },
+            "description": "Podstawowy opis serwisu PostgreSQL i aktywne narzedzia dostepu do bazy."
+          },
+          "response": []
+        },
+        {
+          "name": "GET service-pg health",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{servicePgBaseUrl}}/health",
+              "host": [
+                "{{servicePgBaseUrl}}"
+              ],
+              "path": [
+                "health"
+              ]
+            },
+            "description": "Sprawdza polaczenie z PostgreSQL przez pg, Knex i Prisma."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "service-mongo",
+      "item": [
+        {
+          "name": "GET service-mongo root",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{serviceMongoBaseUrl}}/",
+              "host": [
+                "{{serviceMongoBaseUrl}}"
+              ],
+              "path": [
+                ""
+              ]
+            },
+            "description": "Zwraca podstawowy opis serwisu Mongo."
+          },
+          "response": []
+        },
+        {
+          "name": "GET service-mongo health",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{serviceMongoBaseUrl}}/health",
+              "host": [
+                "{{serviceMongoBaseUrl}}"
+              ],
+              "path": [
+                "health"
+              ]
+            },
+            "description": "Aktualnie sprawdza tylko konfiguracje serwisu Mongo."
+          },
+          "response": []
+        }
+      ]
+    }
+  ]
+}
