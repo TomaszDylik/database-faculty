@@ -9,7 +9,8 @@ app.use(express.json());
 app.get('/', (_req, res) => {
   res.json({
     service: 'service-mongo',
-    message: 'Szkielet serwisu Mongo jest gotowy. Modele i klient bazy beda dodane później.',
+    message: 'Serwis Mongo ma skonfigurowany native driver, Mongoose i model Message.',
+    tools: ['mongodb-native-driver', 'mongoose'],
     routes: {
       health: '/health',
     },
