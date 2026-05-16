@@ -1,5 +1,6 @@
 const express = require('express');
 
+const conversationsRouter = require('./routes/conversations');
 const healthRouter = require('./routes/health');
 
 const app = express();
@@ -13,11 +14,14 @@ app.get('/', (_req, res) => {
     tools: ['prisma', 'knex', 'pg'],
     routes: {
       health: '/health',
+      conversations: '/conversations',
+      addConversationMember: '/conversations/:conversationId/members',
     },
   });
 });
 
 app.use(healthRouter);
+app.use(conversationsRouter);
 
 app.use((_req, res) => {
   res.status(404).json({ error: 'Not found' });
