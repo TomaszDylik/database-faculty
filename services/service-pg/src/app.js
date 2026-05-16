@@ -11,7 +11,7 @@ app.get('/', (_req, res) => {
   res.json({
     service: 'service-pg',
     database: 'postgresql',
-    tools: ['prisma', 'knex', 'pg'],
+    tools: ['prisma', 'knex', 'pg', 'sequelize'],
     routes: {
       health: '/health',
       conversations: '/conversations',

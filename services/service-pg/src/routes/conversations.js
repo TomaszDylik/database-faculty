@@ -1,10 +1,22 @@
 const express = require('express');
 const prisma = require('../db/prisma');
+const { sequelize } = require('../db/sequelize');
+const {
+  User,
+  Conversation,
+  ConversationMember,
+} = require('../db/sequelizeModels');
 
 const router = express.Router();
 
-function sendError(res, status, error, code) {
-  return res.status(status).json({ error, code });
+function sendError(res, status, error, code, details) {
+  const payload = { error, code };
+
+  if (details !== undefined) {
+    payload.details = details;
+  }
+
+  return res.status(status).json(payload);
 }
 
 function serializeConversation(conv) {
@@ -19,6 +31,20 @@ function serializeConversation(conv) {
       role: m.role,
       user: m.user ? { email: m.user.email, displayName: m.user.displayName } : undefined
     })) : []
+  };
+}
+
+function serializeAddedMember(member) {
+  return {
+    userId: member.userId,
+    role: member.role,
+    joinedAt: member.joinedAt,
+    user: member.user
+      ? {
+          email: member.user.email,
+          displayName: member.user.displayName,
+        }
+      : undefined,
   };
 }
 
@@ -69,44 +95,129 @@ router.post('/conversations', async (req, res) => {
 router.post('/conversations/:conversationId/members', async (req, res) => {
   const { conversationId } = req.params;
   const { addedByUserId, userIds = [] } = req.body;
+  const uniqueUserIds = [...new Set(userIds)].filter((userId) => userId !== addedByUserId);
 
-  if (!addedByUserId || userIds.length === 0) {
-    return sendError(res, 400, 'Wymagane addedByUserId oraz lista userIds.', 'VALIDATION_ERROR');
+  if (!addedByUserId || uniqueUserIds.length === 0) {
+    return sendError(
+      res,
+      400,
+      'Wymagane addedByUserId oraz lista userIds.',
+      'VALIDATION_ERROR'
+    );
   }
 
   try {
-    const conversation = await prisma.conversation.findUnique({
-      where: { id: conversationId },
-      include: { members: true }
+    const result = await sequelize.transaction(async (transaction) => {
+      const conversation = await Conversation.findByPk(conversationId, {
+        include: [
+          {
+            model: ConversationMember,
+            as: 'members',
+            include: [
+              {
+                model: User,
+                as: 'user',
+                attributes: ['id', 'email', 'displayName'],
+              },
+            ],
+          },
+        ],
+        transaction,
+      });
+
+      if (!conversation) {
+        throw { status: 404, error: 'Konwersacja nie istnieje.', code: 'NOT_FOUND' };
+      }
+
+      if (conversation.type === 'DIRECT') {
+        throw {
+          status: 409,
+          error: 'Nie można dodawać nowych osób do prywatnej konwersacji (DIRECT).',
+          code: 'DIRECT_LOCKED',
+        };
+      }
+
+      const actorMembership = conversation.members.find((member) => member.userId === addedByUserId);
+
+      if (!actorMembership) {
+        throw {
+          status: 403,
+          error: 'Tylko obecni członkowie mogą dodawać nowe osoby.',
+          code: 'FORBIDDEN',
+        };
+      }
+
+      const existingUsers = await User.findAll({
+        where: { id: uniqueUserIds },
+        attributes: ['id', 'email', 'displayName'],
+        transaction,
+      });
+
+      const existingUserIds = new Set(existingUsers.map((user) => user.id));
+      const missingUserIds = uniqueUserIds.filter(
+        (userId) => !existingUserIds.has(userId)
+      );
+
+      if (missingUserIds.length > 0) {
+        throw {
+          status: 400,
+          error: 'Nie wszyscy wskazani użytkownicy istnieją w bazie.',
+          code: 'USER_NOT_FOUND',
+          details: { missingUserIds },
+        };
+      }
+
+      const currentMemberIds = new Set(conversation.members.map((member) => member.userId));
+
+      const usersToAdd = uniqueUserIds.filter((userId) => !currentMemberIds.has(userId));
+      const skippedUserIds = uniqueUserIds.filter((userId) => currentMemberIds.has(userId));
+
+      if (usersToAdd.length === 0) {
+        return {
+          message: 'Wszyscy wskazani użytkownicy już należą do tej konwersacji.',
+          addedMembers: [],
+          skippedUserIds,
+        };
+      }
+
+      await ConversationMember.bulkCreate(
+        usersToAdd.map((userId) => ({
+          conversationId,
+          userId,
+          role: 'MEMBER',
+        })),
+        { transaction }
+      );
+
+      const createdMembers = await ConversationMember.findAll({
+        where: {
+          conversationId,
+          userId: usersToAdd,
+        },
+        include: [
+          {
+            model: User,
+            as: 'user',
+            attributes: ['id', 'email', 'displayName'],
+          },
+        ],
+        order: [['joinedAt', 'ASC']],
+        transaction,
+      });
+
+      return {
+        message: 'Użytkownicy zostali pomyślnie dodani.',
+        addedMembers: createdMembers.map(serializeAddedMember),
+        skippedUserIds,
+      };
     });
 
-    if (!conversation) {
-      return sendError(res, 404, 'Konwersacja nie istnieje.', 'NOT_FOUND');
-    }
-
-    if (conversation.type === 'DIRECT') {
-      return sendError(res, 409, 'Nie można dodawać nowych osób do prywatnej konwersacji (DIRECT).', 'DIRECT_LOCKED');
-    }
-
-    const isMember = conversation.members.some(m => m.userId === addedByUserId);
-    if (!isMember) {
-      return sendError(res, 403, 'Tylko obecni członkowie mogą dodawać nowe osoby.', 'FORBIDDEN');
-    }
-
-    const uniqueUserIds = [...new Set(userIds)];
-    
-    await prisma.conversationMember.createMany({
-      data: uniqueUserIds.map(id => ({
-        conversationId,
-        userId: id,
-        role: 'MEMBER'
-      })),
-      skipDuplicates: true
-    });
-
-    return res.status(201).json({ message: 'Użytkownicy zostali pomyślnie dodani.' });
-
+    return res.status(result.addedMembers.length > 0 ? 201 : 200).json(result);
   } catch (error) {
+    if (error.status && error.error) {
+      return sendError(res, error.status, error.error, error.code, error.details);
+    }
+
     return sendError(res, 500, 'Nie udało się dodać użytkowników.', 'ADD_FAILED');
   }
 });

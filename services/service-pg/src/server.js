@@ -5,6 +5,7 @@ const { port } = require('./config/env');
 const knexDb = require('./db/knex');
 const { end } = require('./db/pgPool');
 const prisma = require('./db/prisma');
+const { closeSequelize } = require('./db/sequelize');
 
 const server = app.listen(port, () => {
   console.log(`service-pg listening on port ${port}`);
@@ -21,7 +22,12 @@ async function shutdown(signal) {
   console.log(`service-pg received ${signal}, shutting down`);
 
   server.close(async () => {
-    await Promise.allSettled([prisma.$disconnect(), knexDb.destroy(), end()]);
+    await Promise.allSettled([
+      prisma.$disconnect(),
+      knexDb.destroy(),
+      end(),
+      closeSequelize(),
+    ]);
     process.exit(0);
   });
 
