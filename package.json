@@ -8,6 +8,8 @@
     "compose:down": "docker compose down",
     "compose:logs": "docker compose logs -f",
     "db:pg:setup": "npm --prefix services/service-pg run db:setup",
-    "db:pg:seed": "npm --prefix services/service-pg run knex:seed"
+    "db:pg:seed": "npm --prefix services/service-pg run knex:seed",
+    "db:mongo:seed": "docker compose exec -T service-mongo npm run db:seed",
+    "db:seed:chat": "docker compose up -d --build service-pg service-mongo && docker compose exec -T service-pg npm run db:setup && docker compose exec -T service-pg npm run knex:seed && docker compose exec -T service-mongo npm run db:seed"
   }
 }

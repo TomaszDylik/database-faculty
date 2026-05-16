@@ -17,6 +17,34 @@
     {
       "key": "serviceMongoBaseUrl",
       "value": "http://localhost:8082"
+    },
+    {
+      "key": "creatorUserId",
+      "value": "22222222-2222-4222-8222-222222222222"
+    },
+    {
+      "key": "memberUserId",
+      "value": "11111111-1111-4111-8111-111111111111"
+    },
+    {
+      "key": "thirdUserId",
+      "value": "33333333-3333-4333-8333-333333333333"
+    },
+    {
+      "key": "directConversationId",
+      "value": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"
+    },
+    {
+      "key": "groupConversationId",
+      "value": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb"
+    },
+    {
+      "key": "conversationId",
+      "value": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb"
+    },
+    {
+      "key": "newConversationId",
+      "value": "paste-after-create-conversation"
     }
   ],
   "item": [
@@ -99,6 +127,89 @@
             "description": "Sprawdza polaczenie z PostgreSQL przez pg, Knex i Prisma."
           },
           "response": []
+        },
+        {
+          "name": "POST create direct conversation",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"createdById\": \"{{creatorUserId}}\",\n  \"type\": \"DIRECT\",\n  \"memberIds\": [\n    \"{{memberUserId}}\"\n  ]\n}"
+            },
+            "url": {
+              "raw": "{{servicePgBaseUrl}}/conversations",
+              "host": [
+                "{{servicePgBaseUrl}}"
+              ],
+              "path": [
+                "conversations"
+              ]
+            },
+            "description": "Tworzy nowa rozmowe DIRECT na bazie seeded userow."
+          },
+          "response": []
+        },
+        {
+          "name": "POST create group conversation",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"createdById\": \"{{creatorUserId}}\",\n  \"type\": \"GROUP\",\n  \"title\": \"Grupa testowa z Postmana\",\n  \"memberIds\": [\n    \"{{memberUserId}}\"\n  ]\n}"
+            },
+            "url": {
+              "raw": "{{servicePgBaseUrl}}/conversations",
+              "host": [
+                "{{servicePgBaseUrl}}"
+              ],
+              "path": [
+                "conversations"
+              ]
+            },
+            "description": "Tworzy nowa konwersacje GROUP."
+          },
+          "response": []
+        },
+        {
+          "name": "POST add third user to seeded group conversation",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"addedByUserId\": \"{{creatorUserId}}\",\n  \"userIds\": [\n    \"{{thirdUserId}}\"\n  ]\n}"
+            },
+            "url": {
+              "raw": "{{servicePgBaseUrl}}/conversations/{{groupConversationId}}/members",
+              "host": [
+                "{{servicePgBaseUrl}}"
+              ],
+              "path": [
+                "conversations",
+                "{{groupConversationId}}",
+                "members"
+              ]
+            },
+            "description": "Dodaje trzeciego seeded usera do seeded groupConversationId."
+          },
+          "response": []
         }
       ]
     },
@@ -138,6 +249,105 @@
               ]
             },
             "description": "Aktualnie sprawdza tylko konfiguracje serwisu Mongo."
+          },
+          "response": []
+        },
+        {
+          "name": "POST create message",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"conversationId\": \"{{conversationId}}\",\n  \"authorId\": \"{{creatorUserId}}\",\n  \"body\": \"Pierwsza wiadomosc testowa z Postmana\",\n  \"attachments\": [\n    {\n      \"name\": \"brief.txt\",\n      \"mimeType\": \"text/plain\",\n      \"size\": 128,\n      \"storageKey\": \"attachments/brief.txt\"\n    }\n  ]\n}"
+            },
+            "url": {
+              "raw": "{{serviceMongoBaseUrl}}/messages",
+              "host": [
+                "{{serviceMongoBaseUrl}}"
+              ],
+              "path": [
+                "messages"
+              ]
+            },
+            "description": "Tworzy nowa wiadomosc. Domyslnie conversationId wskazuje na seeded groupConversationId. Mozesz tez podmienic conversationId na newConversationId po stworzeniu nowej konwersacji."
+          },
+          "response": []
+        },
+        {
+          "name": "GET conversation messages",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{serviceMongoBaseUrl}}/messages?conversationId={{conversationId}}&limit=20&offset=0&sort=asc",
+              "host": [
+                "{{serviceMongoBaseUrl}}"
+              ],
+              "path": [
+                "messages"
+              ],
+              "query": [
+                {
+                  "key": "conversationId",
+                  "value": "{{conversationId}}"
+                },
+                {
+                  "key": "limit",
+                  "value": "20"
+                },
+                {
+                  "key": "offset",
+                  "value": "0"
+                },
+                {
+                  "key": "sort",
+                  "value": "asc"
+                }
+              ]
+            },
+            "description": "Pobiera wiadomosci dla conversationId. Domyslnie conversationId wskazuje seeded groupConversationId."
+          },
+          "response": []
+        },
+        {
+          "name": "GET direct conversation messages",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{serviceMongoBaseUrl}}/messages?conversationId={{directConversationId}}&limit=20&offset=0&sort=asc",
+              "host": [
+                "{{serviceMongoBaseUrl}}"
+              ],
+              "path": [
+                "messages"
+              ],
+              "query": [
+                {
+                  "key": "conversationId",
+                  "value": "{{directConversationId}}"
+                },
+                {
+                  "key": "limit",
+                  "value": "20"
+                },
+                {
+                  "key": "offset",
+                  "value": "0"
+                },
+                {
+                  "key": "sort",
+                  "value": "asc"
+                }
+              ]
+            },
+            "description": "Pobiera seeded wiadomosci dla rozmowy direct."
           },
           "response": []
         }
