@@ -129,6 +129,64 @@
           "response": []
         },
         {
+          "name": "GET users list",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{servicePgBaseUrl}}/users",
+              "host": [
+                "{{servicePgBaseUrl}}"
+              ],
+              "path": [
+                "users"
+              ]
+            },
+            "description": "Pobiera liste wszystkich userow z PostgreSQL."
+          },
+          "response": []
+        },
+        {
+          "name": "GET creator user conversations",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{servicePgBaseUrl}}/users/{{creatorUserId}}/conversations",
+              "host": [
+                "{{servicePgBaseUrl}}"
+              ],
+              "path": [
+                "users",
+                "{{creatorUserId}}",
+                "conversations"
+              ]
+            },
+            "description": "Pobiera konwersacje seeded ownera."
+          },
+          "response": []
+        },
+        {
+          "name": "GET member user conversations",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{servicePgBaseUrl}}/users/{{memberUserId}}/conversations",
+              "host": [
+                "{{servicePgBaseUrl}}"
+              ],
+              "path": [
+                "users",
+                "{{memberUserId}}",
+                "conversations"
+              ]
+            },
+            "description": "Pobiera konwersacje drugiego seeded usera."
+          },
+          "response": []
+        },
+        {
           "name": "POST create direct conversation",
           "request": {
             "method": "POST",

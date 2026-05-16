@@ -2,6 +2,7 @@ const express = require('express');
 
 const conversationsRouter = require('./routes/conversations');
 const healthRouter = require('./routes/health');
+const usersRouter = require('./routes/users');
 
 const app = express();
 
@@ -14,6 +15,8 @@ app.get('/', (_req, res) => {
     tools: ['prisma', 'knex', 'pg', 'sequelize'],
     routes: {
       health: '/health',
+      users: '/users',
+      userConversations: '/users/:userId/conversations',
       conversations: '/conversations',
       addConversationMember: '/conversations/:conversationId/members',
     },
@@ -21,6 +24,7 @@ app.get('/', (_req, res) => {
 });
 
 app.use(healthRouter);
+app.use(usersRouter);
 app.use(conversationsRouter);
 
 app.use((_req, res) => {

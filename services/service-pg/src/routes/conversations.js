@@ -26,6 +26,7 @@ function serializeConversation(conv) {
     title: conv.title,
     createdById: conv.createdById,
     createdAt: conv.createdAt,
+    lastMessageAt: conv.lastMessageAt,
     members: Array.isArray(conv.members) ? conv.members.map(m => ({
       userId: m.userId,
       role: m.role,
@@ -144,6 +145,18 @@ router.post('/conversations/:conversationId/members', async (req, res) => {
           status: 403,
           error: 'Tylko obecni członkowie mogą dodawać nowe osoby.',
           code: 'FORBIDDEN',
+        };
+      }
+
+      if (actorMembership.role !== 'OWNER' && actorMembership.role !== 'ADMIN') {
+        throw {
+          status: 403,
+          error: 'Nowych czlonkow moze dodawac tylko OWNER lub ADMIN.',
+          code: 'INSUFFICIENT_ROLE',
+          details: {
+            currentRole: actorMembership.role,
+            requiredRoles: ['OWNER', 'ADMIN'],
+          },
         };
       }
 
