@@ -160,6 +160,7 @@ To nie jest OpenAPI 3.x, ale jest rownowazna lista endpointow z przykladowymi za
 | --- | --- | --- |
 | `GET` | `/` | Opis serwisu Mongo |
 | `GET` | `/health` | Health native drivera, Mongoose i prostego polaczenia `pg` |
+| `GET` | `/analytics/messages/daily` | Endpoint analityczny MongoDB liczacy statystyki dzienne dla jednej konwersacji przez `aggregate(...)` i self-`$lookup` |
 | `POST` | `/messages` | Hybrydowy zapis wiadomosci: MongoDB + synchronizacja metadanych w PostgreSQL |
 | `GET` | `/messages` | Lista wiadomosci dla `conversationId` z `limit`, `offset`, `sort` |
 
@@ -389,6 +390,34 @@ Przykladowa odpowiedz `200`:
 }
 ```
 
+### GET /analytics/messages/daily?conversationId=...&timezone=UTC
+
+Request:
+
+```http
+GET /analytics/messages/daily?conversationId=bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb&timezone=UTC
+```
+
+Przykladowa odpowiedz `200`:
+
+```json
+{
+	"conversationId": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+	"timezone": "UTC",
+	"days": [
+		{
+			"day": "2026-05-17",
+			"messageCount": 2,
+			"latestMessage": {
+				"authorId": "11111111-1111-4111-8111-111111111111",
+				"body": "Odpowiedz na wiadomosc z danego dnia.",
+				"createdAt": "2026-05-17T10:20:00.000Z"
+			}
+		}
+	]
+}
+```
+
 ### Format bledow
 
 Glowny format bledow w endpointach biznesowych:
@@ -423,6 +452,5 @@ Najwazniejsze obecne ryzyka i braki:
 
 ## Co jeszcze nie jest domkniete
 
-- brak endpointu analitycznego z aggregation pipeline,
 - brak testow integracyjnych / e2e,
 - brak natywnego endpointu MongoDB z operatorami typu `$in`, `$text`, `$gt` / `$lt`.

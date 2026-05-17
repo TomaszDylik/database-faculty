@@ -311,6 +311,36 @@
           "response": []
         },
         {
+          "name": "GET daily message analytics",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{serviceMongoBaseUrl}}/analytics/messages/daily?conversationId={{groupConversationId}}&timezone=UTC",
+              "host": [
+                "{{serviceMongoBaseUrl}}"
+              ],
+              "path": [
+                "analytics",
+                "messages",
+                "daily"
+              ],
+              "query": [
+                {
+                  "key": "conversationId",
+                  "value": "{{groupConversationId}}"
+                },
+                {
+                  "key": "timezone",
+                  "value": "UTC"
+                }
+              ]
+            },
+            "description": "Endpoint analityczny MongoDB oparty o aggregate(...). Liczy statystyki dzienne dla jednej rozmowy i zwraca latestMessage przez self-$lookup na tej samej kolekcji messages."
+          },
+          "response": []
+        },
+        {
           "name": "POST create message",
           "request": {
             "method": "POST",

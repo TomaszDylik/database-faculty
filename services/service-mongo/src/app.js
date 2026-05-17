@@ -15,6 +15,7 @@ app.get('/', (_req, res) => {
     routes: {
       health: '/health',
       messages: '/messages',
+      analyticsDaily: '/analytics/messages/daily',
     },
   });
 });

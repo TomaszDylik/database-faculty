@@ -19,6 +19,80 @@ function serializeMessage(msg) {
   };
 }
 
+function normalizeString(value) {
+  return typeof value === 'string' ? value.trim() : '';
+}
+
+function isValidTimeZone(value) {
+  try {
+    Intl.DateTimeFormat('en-US', { timeZone: value });
+    return true;
+  } catch (_error) {
+    return false;
+  }
+}
+
+function buildDailyAnalyticsPipeline({ conversationId, timeZone }) {
+  return [
+    { $match: { conversationId } },
+    {
+      $group: {
+        _id: {
+          $dateToString: {
+            format: '%Y-%m-%d',
+            date: '$createdAt',
+            timezone: timeZone,
+          },
+        },
+        messageCount: { $sum: 1 },
+        lastMessageAt: { $max: '$createdAt' },
+      },
+    },
+    {
+      $project: {
+        _id: 0,
+        day: '$_id',
+        messageCount: 1,
+        lastMessageAt: 1,
+      },
+    },
+    {
+      $lookup: {
+        from: Message.collection.collectionName,
+        let: {
+          lastMessageAt: '$lastMessageAt',
+        },
+        pipeline: [
+          {
+            $match: {
+              conversationId,
+              $expr: { $eq: ['$createdAt', '$$lastMessageAt'] },
+            },
+          },
+          {
+            $project: {
+              _id: 0,
+              authorId: 1,
+              body: 1,
+              createdAt: 1,
+            },
+          },
+          { $limit: 1 },
+        ],
+        as: 'latestMessage',
+      },
+    },
+    {
+      $project: {
+        day: 1,
+        messageCount: 1,
+        latestMessage: { $arrayElemAt: ['$latestMessage', 0] },
+      },
+    },
+    { $sort: { day: 1 } },
+  ];
+}
+
 async function createHybridMessage({ conversationId, authorId, body, attachments }) {
   return withPgClient(async (client) => {
     let storedMessage = null;
@@ -73,6 +147,41 @@ async function createHybridMessage({ conversationId, authorId, body, attachments
     }
   });
 }
+
+router.get('/analytics/messages/daily', async (req, res) => {
+  const conversationId = normalizeString(req.query.conversationId);
+  const timeZone = normalizeString(req.query.timezone) || 'UTC';
+
+  if (!conversationId) {
+    return sendError(
+      res,
+      400,
+      'Parametr conversationId jest wymagany dla endpointu analitycznego.',
+      'VALIDATION_ERROR'
+    );
+  }
+
+  if (!isValidTimeZone(timeZone)) {
+    return sendError(res, 400, 'Parametr timezone nie jest poprawna strefa czasowa.', 'VALIDATION_ERROR');
+  }
+
+  try {
+    const days = await Message.aggregate(buildDailyAnalyticsPipeline({ conversationId, timeZone }));
+
+    return res.json({
+      conversationId,
+      timezone: timeZone,
+      days,
+    });
+  } catch (error) {
+    return sendError(
+      res,
+      500,
+      'Nie udalo sie policzyc analityki wiadomosci.',
+      'MESSAGES_ANALYTICS_FAILED'
+    );
+  }
+});
 
 
 router.post('/messages', async (req, res) => {
