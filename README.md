@@ -5,6 +5,7 @@ Mikroserwisowy backend czatu oparty o PostgreSQL i MongoDB.
 Cel projektu:
 - PostgreSQL przechowuje trwale metadane: userow, konwersacje, czlonkostwo i porzadek wiadomosci.
 - MongoDB przechowuje tresc wiadomosci i zalaczniki jako dokumenty.
+- `POST /messages` zapisuje dokument w MongoDB i synchronizuje metadane rozmowy w PostgreSQL.
 - API Gateway agreguje healthchecki i jest przygotowane pod dalsze proxy HTTP.
 
 ## Stos technologiczny
@@ -27,7 +28,7 @@ Cel projektu:
 | --- | --- | --- |
 | `api-gateway` | `8080` | Health aggregator i przyszly punkt wejscia pod proxy |
 | `service-pg` | `8081` | Userzy, konwersacje, czlonkostwo, relacyjna logika biznesowa |
-| `service-mongo` | `8082` | Wiadomosci, zalaczniki, dokumenty MongoDB |
+| `service-mongo` | `8082` | Wiadomosci, zalaczniki, dokumenty MongoDB i hybrydowa synchronizacja metadanych |
 | `postgres` | `5432` | Trwale metadane relacyjne |
 | `mongo` | `27017` | Dokumenty wiadomosci |
 
@@ -96,6 +97,7 @@ Aktualny stan architektury:
 - requesty biznesowe ida bezposrednio do `service-pg` i `service-mongo`,
 - `api-gateway` agreguje healthchecki,
 - docelowo routing biznesowy ma przejsc przez gateway.
+- przy `POST /messages` `service-mongo` zapisuje wiadomosc w MongoDB, a potem aktualizuje `last_message_at`, `next_message_seq` i `message_pointers` w PostgreSQL.
 
 ```mermaid
 flowchart LR
@@ -115,6 +117,7 @@ flowchart LR
 
 		ServicePg --> Postgres
 		ServiceMongo --> Mongo
+		ServiceMongo --> Postgres
 ```
 
 ## Seed danych testowych
@@ -156,8 +159,8 @@ To nie jest OpenAPI 3.x, ale jest rownowazna lista endpointow z przykladowymi za
 | Metoda | Sciezka | Opis |
 | --- | --- | --- |
 | `GET` | `/` | Opis serwisu Mongo |
-| `GET` | `/health` | Health native drivera i Mongoose |
-| `POST` | `/messages` | Zapis wiadomosci do MongoDB |
+| `GET` | `/health` | Health native drivera, Mongoose i prostego polaczenia `pg` |
+| `POST` | `/messages` | Hybrydowy zapis wiadomosci: MongoDB + synchronizacja metadanych w PostgreSQL |
 | `GET` | `/messages` | Lista wiadomosci dla `conversationId` z `limit`, `offset`, `sort` |
 
 ## Przykladowe requesty i odpowiedzi
@@ -329,7 +332,7 @@ Przykladowa odpowiedz `201`:
 		"conversationId": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
 		"authorId": "22222222-2222-4222-8222-222222222222",
 		"body": "Pierwsza wiadomosc testowa z README",
-		"deliveryStatus": "RECEIVED",
+		"deliveryStatus": "STORED",
 		"attachments": [
 			{
 				"name": "brief.txt",
@@ -340,7 +343,20 @@ Przykladowa odpowiedz `201`:
 		],
 		"createdAt": "2026-05-17T10:10:00.000Z",
 		"editedAt": null
+	},
+	"postgres": {
+		"synced": true,
+		"sequence": 1
 	}
+}
+```
+
+Przykladowa odpowiedz `403` dla usera spoza rozmowy:
+
+```json
+{
+	"error": "Nie mozna wyslac wiadomosci do konwersacji bez czlonkostwa.",
+	"code": "FORBIDDEN"
 }
 ```
 
@@ -358,7 +374,7 @@ Przykladowa odpowiedz `200`:
 			"conversationId": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
 			"authorId": "22222222-2222-4222-8222-222222222222",
 			"body": "Pierwsza wiadomosc testowa z README",
-			"deliveryStatus": "RECEIVED",
+			"deliveryStatus": "STORED",
 			"attachments": [],
 			"createdAt": "2026-05-17T10:10:00.000Z",
 			"editedAt": null
@@ -389,6 +405,7 @@ Glowny format bledow w endpointach biznesowych:
 
 - Gotowa kolekcja Postmana: [postman/database-faculty.postman_collection.json](postman/database-faculty.postman_collection.json)
 - Najwygodniej zaczac od `GET /users`, potem `GET /users/:userId/conversations`, a na koncu testowac `POST /conversations` i `POST /messages`.
+- Do sprawdzenia nowej logiki hybrydowej jest tez wygodny scenariusz: `POST /messages`, a potem `GET /users/:userId/conversations` i kontrola `lastMessageAt`.
 
 ## Bezpieczenstwo i znane ograniczenia
 
@@ -399,15 +416,13 @@ Co jest juz teraz:
 
 Najwazniejsze obecne ryzyka i braki:
 - brak autoryzacji i uwierzytelniania,
-- `service-mongo` nie sprawdza jeszcze czlonkostwa autora w konwersacji przed zapisem wiadomosci,
 - brak rate limitingu i brak dodatkowych zabezpieczen HTTP,
-- brak pelnego mapowania bledow PostgreSQL i MongoDB na statusy HTTP,
+- brak pelnego mapowania wszystkich bledow PostgreSQL i MongoDB na statusy HTTP,
 - `api-gateway` nie proxy'uje jeszcze requestow biznesowych,
 - dane z `.env.example` sa developerskie i nie powinny byc uzywane 1:1 na produkcji.
 
 ## Co jeszcze nie jest domkniete
 
-- brak hybrydowego zapisu `Mongo + PostgreSQL` przy `POST /messages`,
 - brak endpointu analitycznego z aggregation pipeline,
 - brak testow integracyjnych / e2e,
 - brak natywnego endpointu MongoDB z operatorami typu `$in`, `$text`, `$gt` / `$lt`.

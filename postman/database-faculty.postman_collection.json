@@ -306,7 +306,7 @@
                 "health"
               ]
             },
-            "description": "Aktualnie sprawdza tylko konfiguracje serwisu Mongo."
+            "description": "Sprawdza MongoDB oraz proste polaczenie pg potrzebne do hybrydowego zapisu wiadomosci."
           },
           "response": []
         },
@@ -333,7 +333,34 @@
                 "messages"
               ]
             },
-            "description": "Tworzy nowa wiadomosc. Domyslnie conversationId wskazuje na seeded groupConversationId. Mozesz tez podmienic conversationId na newConversationId po stworzeniu nowej konwersacji."
+            "description": "Tworzy nowa wiadomosc. Endpoint zapisuje dokument w MongoDB i synchronizuje lastMessageAt, nextMessageSeq oraz message_pointers w PostgreSQL. Autor musi nalezec do konwersacji."
+          },
+          "response": []
+        },
+        {
+          "name": "POST create message as non-member (403)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"conversationId\": \"{{directConversationId}}\",\n  \"authorId\": \"{{thirdUserId}}\",\n  \"body\": \"Ta wiadomosc powinna zostac odrzucona\",\n  \"attachments\": []\n}"
+            },
+            "url": {
+              "raw": "{{serviceMongoBaseUrl}}/messages",
+              "host": [
+                "{{serviceMongoBaseUrl}}"
+              ],
+              "path": [
+                "messages"
+              ]
+            },
+            "description": "Test negatywny. thirdUserId nie nalezy do seeded rozmowy direct, wiec endpoint powinien zwrocic 403 FORBIDDEN."
           },
           "response": []
         },

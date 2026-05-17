@@ -10,8 +10,8 @@ app.use(express.json());
 app.get('/', (_req, res) => {
   res.json({
     service: 'service-mongo',
-    message: 'Serwis Mongo ma skonfigurowany native driver, Mongoose i model Message.',
-    tools: ['mongodb-native-driver', 'mongoose'],
+    message: 'Serwis Mongo zapisuje wiadomosci w MongoDB i synchronizuje metadane rozmowy w PostgreSQL.',
+    tools: ['mongodb-native-driver', 'mongoose', 'pg'],
     routes: {
       health: '/health',
       messages: '/messages',

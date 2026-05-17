@@ -12,7 +12,8 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-chat_user} -d ${POSTGRES_DB:-chat_app}"]
+      test: >-
+        pg_isready -U ${POSTGRES_USER:-chat_user} -d ${POSTGRES_DB:-chat_app}
       interval: 5s
       timeout: 5s
       retries: 10
@@ -31,11 +32,11 @@ services:
     volumes:
       - mongo_data:/data/db
     healthcheck:
-      test:
-        [
-          "CMD-SHELL",
-          "mongosh --quiet --username ${MONGO_INITDB_ROOT_USERNAME:-chat_root} --password ${MONGO_INITDB_ROOT_PASSWORD:-chat_password} --authenticationDatabase admin --eval \"quit(db.runCommand({ ping: 1 }).ok ? 0 : 2)\""
-        ]
+      test: >-
+        mongosh --quiet --username ${MONGO_INITDB_ROOT_USERNAME:-chat_root}
+        --password ${MONGO_INITDB_ROOT_PASSWORD:-chat_password}
+        --authenticationDatabase admin
+        --eval "quit(db.adminCommand('ping').ok ? 0 : 2)"
       interval: 5s
       timeout: 10s
       retries: 10
@@ -57,7 +58,8 @@ services:
       postgres:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:8081/health').then((res) => process.exit(res.ok ? 0 : 1)).catch(() => process.exit(1))"]
+      test: >-
+        node -e "fetch('http://127.0.0.1:8081/health').then((res) => process.exit(res.ok ? 0 : 1)).catch(() => process.exit(1))"
       interval: 10s
       timeout: 5s
       retries: 10
@@ -72,14 +74,18 @@ services:
     environment:
       NODE_ENV: ${NODE_ENV:-development}
       PORT: 8082
+      DATABASE_URL: ${DATABASE_URL:-postgresql://chat_user:chat_password@postgres:5432/chat_app?schema=public}
       MONGO_URI: ${MONGO_URI:-mongodb://chat_root:chat_password@mongo:27017/chat_messages?authSource=admin}
     ports:
       - "${SERVICE_MONGO_PORT:-8082}:8082"
     depends_on:
+      postgres:
+        condition: service_healthy
       mongo:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:8082/health').then((res) => process.exit(res.ok ? 0 : 1)).catch(() => process.exit(1))"]
+      test: >-
+        node -e "fetch('http://127.0.0.1:8082/health').then((res) => process.exit(res.ok ? 0 : 1)).catch(() => process.exit(1))"
       interval: 10s
       timeout: 5s
       retries: 10
@@ -104,12 +110,13 @@ services:
       service-mongo:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:8080/health').then((res) => process.exit(res.ok ? 0 : 1)).catch(() => process.exit(1))"]
+      test: >-
+        node -e "fetch('http://127.0.0.1:8080/health').then((res) => process.exit(res.ok ? 0 : 1)).catch(() => process.exit(1))"
       interval: 10s
       timeout: 5s
       retries: 10
       start_period: 20s
 
 volumes:
-  postgres_data:
-  mongo_data:
+  postgres_data: {}
+  mongo_data: {}
