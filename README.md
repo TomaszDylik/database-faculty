@@ -161,6 +161,7 @@ To nie jest OpenAPI 3.x, ale jest rownowazna lista endpointow z przykladowymi za
 | `GET` | `/` | Opis serwisu Mongo |
 | `GET` | `/health` | Health native drivera, Mongoose i prostego polaczenia `pg` |
 | `GET` | `/analytics/messages/daily` | Endpoint analityczny MongoDB liczacy statystyki dzienne dla jednej konwersacji przez `aggregate(...)` i self-`$lookup` |
+| `GET` | `/messages/native-search` | Natywne wyszukiwanie MongoDB przez `MongoClient` z operatorami `$in`, `$text`, `$gte` i `$lte` |
 | `POST` | `/messages` | Hybrydowy zapis wiadomosci: MongoDB + synchronizacja metadanych w PostgreSQL |
 | `GET` | `/messages` | Lista wiadomosci dla `conversationId` z `limit`, `offset`, `sort` |
 
@@ -418,6 +419,34 @@ Przykladowa odpowiedz `200`:
 }
 ```
 
+### GET /messages/native-search?conversationIds=...&q=...&from=...&to=...
+
+Request:
+
+```http
+GET /messages/native-search?conversationIds=aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa,bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb&q=seeded&from=2026-05-16T00:00:00.000Z&to=2026-05-17T23:59:59.999Z&limit=10
+```
+
+Przykladowa odpowiedz `200`:
+
+```json
+{
+	"engine": "mongodb-native-driver",
+	"operatorsUsed": ["$in", "$text", "$gte", "$lte"],
+	"limit": 10,
+	"items": [
+		{
+			"id": "mongo-object-id",
+			"conversationId": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+			"authorId": "22222222-2222-4222-8222-222222222222",
+			"body": "1 seeded wiadomosc w grupie projektowej.",
+			"attachments": [],
+			"createdAt": "2026-05-16T11:00:00.000Z"
+		}
+	]
+}
+```
+
 ### Format bledow
 
 Glowny format bledow w endpointach biznesowych:
@@ -435,6 +464,9 @@ Glowny format bledow w endpointach biznesowych:
 - Gotowa kolekcja Postmana: [postman/database-faculty.postman_collection.json](postman/database-faculty.postman_collection.json)
 - Najwygodniej zaczac od `GET /users`, potem `GET /users/:userId/conversations`, a na koncu testowac `POST /conversations` i `POST /messages`.
 - Do sprawdzenia nowej logiki hybrydowej jest tez wygodny scenariusz: `POST /messages`, a potem `GET /users/:userId/conversations` i kontrola `lastMessageAt`.
+- Do sprawdzenia natywnego Mongo najlepiej odpalic `GET /messages/native-search`, bo ten endpoint pokazuje osobno uzycie `MongoClient` oraz operatorow `$in`, `$text`, `$gte`, `$lte`.
+
+
 
 ## Bezpieczenstwo i znane ograniczenia
 
@@ -453,4 +485,5 @@ Najwazniejsze obecne ryzyka i braki:
 ## Co jeszcze nie jest domkniete
 
 - brak testow integracyjnych / e2e,
-- brak natywnego endpointu MongoDB z operatorami typu `$in`, `$text`, `$gt` / `$lt`.
+- brak endpointu Knex z dynamicznym `where`,
+- brak hooka domenowego w Sequelize.

@@ -1,4 +1,5 @@
 const express = require('express');
+const { getDatabase } = require('../db/mongoClient');
 const { withPgClient } = require('../db/pgPool');
 const Message = require('../models/Message');
 
@@ -21,6 +22,28 @@ function serializeMessage(msg) {
 
 function normalizeString(value) {
   return typeof value === 'string' ? value.trim() : '';
+}
+
+function parseCsvList(value) {
+  if (typeof value !== 'string') {
+    return [];
+  }
+
+  return value
+    .split(',')
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
+function parseDateParam(value) {
+  const normalized = normalizeString(value);
+
+  if (!normalized) {
+    return null;
+  }
+
+  const parsed = new Date(normalized);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
 }
 
 function isValidTimeZone(value) {
@@ -91,6 +114,17 @@ function buildDailyAnalyticsPipeline({ conversationId, timeZone }) {
     },
     { $sort: { day: 1 } },
   ];
+}
+
+function serializeNativeSearchMessage(doc) {
+  return {
+    id: doc._id.toString(),
+    conversationId: doc.conversationId,
+    authorId: doc.authorId,
+    body: doc.body,
+    attachments: doc.attachments || [],
+    createdAt: doc.createdAt,
+  };
 }
 
 async function createHybridMessage({ conversationId, authorId, body, attachments }) {
@@ -179,6 +213,101 @@ router.get('/analytics/messages/daily', async (req, res) => {
       500,
       'Nie udalo sie policzyc analityki wiadomosci.',
       'MESSAGES_ANALYTICS_FAILED'
+    );
+  }
+});
+
+router.get('/messages/native-search', async (req, res) => {
+  const conversationIds = parseCsvList(req.query.conversationIds);
+  const searchText = normalizeString(req.query.q);
+  const fromDate = parseDateParam(req.query.from);
+  const toDate = parseDateParam(req.query.to);
+  const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 20, 1), 50);
+  const filter = {};
+  const operatorsUsed = [];
+
+  if (!conversationIds.length && !searchText && !req.query.from && !req.query.to) {
+    return sendError(
+      res,
+      400,
+      'Podaj co najmniej jeden filtr: conversationIds, q, from lub to.',
+      'VALIDATION_ERROR'
+    );
+  }
+
+  if (req.query.from && !fromDate) {
+    return sendError(res, 400, 'Parametr from musi byc poprawna data ISO.', 'VALIDATION_ERROR');
+  }
+
+  if (req.query.to && !toDate) {
+    return sendError(res, 400, 'Parametr to musi byc poprawna data ISO.', 'VALIDATION_ERROR');
+  }
+
+  if (fromDate && toDate && fromDate > toDate) {
+    return sendError(res, 400, 'Parametr from nie moze byc pozniejszy niz to.', 'VALIDATION_ERROR');
+  }
+
+  if (conversationIds.length > 0) {
+    filter.conversationId = { $in: conversationIds };
+    operatorsUsed.push('$in');
+  }
+
+  if (searchText) {
+    filter.$text = { $search: searchText };
+    operatorsUsed.push('$text');
+  }
+
+  if (fromDate || toDate) {
+    filter.createdAt = {};
+
+    if (fromDate) {
+      filter.createdAt.$gte = fromDate;
+      operatorsUsed.push('$gte');
+    }
+
+    if (toDate) {
+      filter.createdAt.$lte = toDate;
+      operatorsUsed.push('$lte');
+    }
+  }
+
+  try {
+    const database = await getDatabase();
+    const collection = database.collection('messages');
+    const projection = {
+      conversationId: 1,
+      authorId: 1,
+      body: 1,
+      attachments: 1,
+      createdAt: 1,
+    };
+
+    if (searchText) {
+      projection.score = { $meta: 'textScore' };
+    }
+
+    let cursor = collection.find(filter, { projection });
+
+    if (searchText) {
+      cursor = cursor.sort({ score: { $meta: 'textScore' }, createdAt: -1 });
+    } else {
+      cursor = cursor.sort({ createdAt: -1 });
+    }
+
+    const items = await cursor.limit(limit).toArray();
+
+    return res.json({
+      engine: 'mongodb-native-driver',
+      operatorsUsed,
+      limit,
+      items: items.map(serializeNativeSearchMessage),
+    });
+  } catch (error) {
+    return sendError(
+      res,
+      500,
+      'Nie udalo sie wykonac natywnego wyszukiwania MongoDB.',
+      'NATIVE_SEARCH_FAILED'
     );
   }
 });

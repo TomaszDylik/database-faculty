@@ -341,6 +341,47 @@
           "response": []
         },
         {
+          "name": "GET native message search",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{serviceMongoBaseUrl}}/messages/native-search?conversationIds={{directConversationId}},{{groupConversationId}}&q=seeded&from=2026-05-16T00:00:00.000Z&to=2026-05-17T23:59:59.999Z&limit=10",
+              "host": [
+                "{{serviceMongoBaseUrl}}"
+              ],
+              "path": [
+                "messages",
+                "native-search"
+              ],
+              "query": [
+                {
+                  "key": "conversationIds",
+                  "value": "{{directConversationId}},{{groupConversationId}}"
+                },
+                {
+                  "key": "q",
+                  "value": "seeded"
+                },
+                {
+                  "key": "from",
+                  "value": "2026-05-16T00:00:00.000Z"
+                },
+                {
+                  "key": "to",
+                  "value": "2026-05-17T23:59:59.999Z"
+                },
+                {
+                  "key": "limit",
+                  "value": "10"
+                }
+              ]
+            },
+            "description": "Natywne wyszukiwanie MongoDB przez MongoClient. Ten request odpala jednoczesnie `$in`, `$text`, `$gte` i `$lte` na kolekcji messages."
+          },
+          "response": []
+        },
+        {
           "name": "POST create message",
           "request": {
             "method": "POST",
