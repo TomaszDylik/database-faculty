@@ -1,0 +1,78 @@
+Wymiana krótkich wiadomości — backend i przechowywanie
+Serwis czatu tekstowego: użytkownicy, konwersacje (bezpośrednie lub grupowe), wiadomości z timestampem i statusem dostarczenia po stronie serwera. PostgreSQL przechowuje trwałe metadane konwersacji, członków i kolejność wiadomości z ograniczeniami integralności. MongoDB: pełna treść wiadomości i załączniki meta jako dokumenty (elastyczna struktura), bufor zdarzeń do agregacji aktywności lub indeksów pełnotekstowych. Real-time (WebSocket) jest opcjonalny — minimalny zakres to REST + poprawny model BD; ocena skupia się na SQL, Mongo i spójności.
+
+Maksymalna punktacja: 32 pkt
+Wymagania dla projektu: Wymiana krótkich wiadomości — backend i przechowywanie
+Pobierz CSV
+Wymagania wspólne (dla wszystkich projektów)
+Wymagania techniczne — Bazy Danych 2 (T1–T8)
+Pełna specyfikacja: dokument projekt_wymagania.md. Suma wag w tej grupie: 60 (60%).
+
+T1 — sterownik pg
+Pula połączeń singleton, zapytania parametryzowane ($1, $2), mapowanie kodów PostgreSQL (np. 23505, 23503) na HTTP.
+7%
+T2 — Knex.js
+Schemat wyłącznie przez migracje (min. 2 addytywne), seedy domenowe, min. 1 endpoint z dynamicznym where bez sklejania SQL z stringów.
+7%
+T3 — Sequelize v6
+Min. 2 modele z walidacją, relacje użyte w endpointach, eager loading (include), hook domenowy, transakcja zarządzana.
+7%
+T4 — Prisma
+Min. 2 modele z relacjami, historia migracji (migrate deploy na czystej bazie), CRUD przez PrismaClient bez any, min. 1 $queryRaw (tagged template).
+7%
+T5 — MongoDB native driver
+Singleton MongoClient, zamknięcie przy SIGINT, zasób domenowy sterownikiem natywnym, min. 3 różne operatory w realnych endpointach, indeks złożony lub tekstowy.
+6%
+T6 — Mongoose
+Min. 2 schematy z walidatorami niestandardowymi, subdokument lub tablica zagnieżdżona, pre hook, populate w endpoincie, methods lub statics.
+6%
+T7 — Aggregation Pipeline
+Pipeline z $match, $group, $project i min. jednym dodatkowym stage; $lookup; pierwszy $match pod indeks; endpoint analityczny — agregacja w bazie.
+6%
+T8a — Konteneryzacja
+docker compose up bez kroków ręcznych, multi-stage Dockerfile, healthchecki, depends_on service_healthy, .env.example.
+4%
+T8b — Mikroserwisy
+Min. 2 serwisy Node w osobnych kontenerach, podział per silnik BD, komunikacja HTTP/broker, API Gateway, migracje/seedy z compose.
+5%
+T8c — Architektura hybrydowa
+Min. 1 operacja zapisu do PG i Mongo z rollbackiem lub kompensacją; jednolity format błędów { error, code, details }.
+5%
+Wymagania dodatkowe (wspólne)
+Elementy obowiązujące niezależnie od wybranego tematu. Suma wag: 15 (15%).
+
+README i opis architektury
+Repozytorium zawiera README: jak uruchomić (compose), zmienne środowiskowe, podział serwisów, diagram lub opis przepływu danych PG/Mongo.
+4%
+OpenAPI / kontrakt REST
+Publikowalna specyfikacja OpenAPI 3.x lub równoważna lista endpointów z przykładowymi żądaniami/odpowiedziami.
+4%
+Testy automatyczne
+Min. zestaw testów integracyjnych lub e2e krytycznych ścieżek API (np. supertest + baza testowa).
+4%
+Bezpieczeństwo podstawowe
+Walidacja wejścia, brak wycieku stack trace do klienta, jawna obsługa błędów SQL/Mongo; krótki opis zagrożeń w README.
+3%
+Wymagania specyficzne dla tego projektu
+Model relacyjny: użytkownicy, konwersacje, członkostwo
+PostgreSQL: users; conversations (typ direct/group, tytuł opcjonalny); conversation_members (role, dołączenie); opcjonalnie message_pointers (conversation_id, seq, mongo_id) dla spójnej kolejności i FK.
+10%
+Model dokumentowy: wiadomości i metadane
+MongoDB: kolekcja messages z conversationId, authorId, body, createdAt, editedAt; załączniki jako zagnieżdżone lub osobna kolekcja; indeksy pod listę chronologiczną i wyszukiwanie. Agregacja np. liczba wiadomości per dzień / per konwersacja (T7).
+10%
+API: konwersacje i wiadomości
+Tworzenie konwersacji, dodawanie członków z regułami (np. tylko admin w grupie). GET lista wiadomości z cursorem lub offset z limitem. POST wiadomość z walidacją długości i uprawnień. Lista konwersacji użytkownika z sortowaniem po ostatniej aktywności (może wymagać pola w PG lub projekcji).
+8%
+Reguły i ograniczenia
+Blokada wysyłki do konwersacji bez członkostwa — 403. Usunięcie użytkownika — polityka dla historii (jawna). Duplikat wiadomości w krótkim oknie — opcjonalna idempotencja przez clientMessageId. Mapowanie błędów BD na HTTP.
+6%
+Operacja hybrydowa
+Zapis wiadomości: insert dokumentu w Mongo + aktualizacja last_message_at / seq w PG w jednej logice biznesowej z kompensacją przy błędzie (T8c).
+6%
+Podsumowanie wymagań:
+Wspólne wymagania:
+75%
+Specyficzne wymagania:
+40%
+RAZEM:
+100% 

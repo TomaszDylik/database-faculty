@@ -1,0 +1,6 @@
+npm run compose:up
+docker compose ps
+-migracje 
+npm run db:pg:setup
+-seed
+npm run db:seed:chat

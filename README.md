@@ -481,9 +481,3 @@ Najwazniejsze obecne ryzyka i braki:
 - brak pelnego mapowania wszystkich bledow PostgreSQL i MongoDB na statusy HTTP,
 - `api-gateway` nie proxy'uje jeszcze requestow biznesowych,
 - dane z `.env.example` sa developerskie i nie powinny byc uzywane 1:1 na produkcji.
-
-## Co jeszcze nie jest domkniete
-
-- brak testow integracyjnych / e2e,
-- brak endpointu Knex z dynamicznym `where`,
-- brak hooka domenowego w Sequelize.
