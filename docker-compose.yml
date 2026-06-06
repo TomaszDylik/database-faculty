@@ -46,6 +46,19 @@ services:
       retries: 10
       start_period: 10s
 
+  redis:
+    image: redis:alpine
+    container_name: database-faculty-redis
+    restart: unless-stopped
+    networks:
+      - private_net
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 5s
+
   service-pg:
     build:
       context: ./services/service-pg
@@ -56,6 +69,7 @@ services:
       NODE_ENV: ${NODE_ENV:-development}
       PORT: 8081
       DATABASE_URL: ${DATABASE_URL:-postgresql://chat_user:chat_password@postgres:5432/chat_app?schema=public}
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379}
     ports:
       - "${SERVICE_PG_PORT:-8081}:8081"
     networks:
@@ -63,6 +77,8 @@ services:
       - public_net
     depends_on:
       postgres:
+        condition: service_healthy
+      redis:
         condition: service_healthy
     healthcheck:
       test: >-
@@ -128,6 +144,30 @@ services:
       timeout: 5s
       retries: 10
       start_period: 20s
+
+  nginx:
+    image: nginx:alpine
+    container_name: database-faculty-nginx
+    restart: unless-stopped
+    ports:
+      - "80:80"
+    networks:
+      - public_net
+    depends_on:
+      api-gateway:
+        condition: service_healthy
+    command: >
+      sh -c "printf '%s\n'
+      'server {'
+      '    listen 80;'
+      '    location / {'
+      '        proxy_pass http://api-gateway:8080;'
+      '        proxy_set_header Host $$host;'
+      '        proxy_set_header X-Real-IP $$remote_addr;'
+      '    }'
+      '}'
+      > /etc/nginx/conf.d/default.conf
+      && nginx -g 'daemon off;'"
 
 volumes:
   postgres_data: {}

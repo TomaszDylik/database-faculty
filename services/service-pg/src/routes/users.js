@@ -1,6 +1,44 @@
 const express = require('express');
+const { createClient } = require('redis');
 
 const prisma = require('../db/prisma');
+
+const REDIS_URL = process.env.REDIS_URL || 'redis://redis:6379';
+const USERS_CACHE_KEY = 'users_cache';
+const USERS_CACHE_TTL_SECONDS = 60;
+
+let redisClient = null;
+
+async function getRedisClient() {
+  try {
+    if (!redisClient) {
+      redisClient = createClient({ url: REDIS_URL });
+      redisClient.on('error', () => {});
+      await redisClient.connect();
+    } else if (!redisClient.isOpen) {
+      await redisClient.connect();
+    }
+
+    return redisClient;
+  } catch {
+    redisClient = null;
+    return null;
+  }
+}
+
+async function fetchUsersFromDatabase() {
+  const users = await prisma.user.findMany({
+    orderBy: [
+      { displayName: 'asc' },
+      { email: 'asc' },
+    ],
+  });
+
+  return {
+    total: users.length,
+    users: users.map(serializeUser),
+  };
+}
 
 const router = express.Router();
 
@@ -61,17 +99,28 @@ function serializeConversation(conversation) {
 
 router.get('/users', async (_req, res) => {
   try {
-    const users = await prisma.user.findMany({
-      orderBy: [
-        { displayName: 'asc' },
-        { email: 'asc' },
-      ],
-    });
+    const redis = await getRedisClient();
 
-    return res.json({
-      total: users.length,
-      users: users.map(serializeUser),
-    });
+    if (redis) {
+      try {
+        const cached = await redis.get(USERS_CACHE_KEY);
+        if (cached) {
+          return res.json(JSON.parse(cached));
+        }
+      } catch {
+      }
+    }
+
+    const payload = await fetchUsersFromDatabase();
+
+    if (redis) {
+      try {
+        await redis.setEx(USERS_CACHE_KEY, USERS_CACHE_TTL_SECONDS, JSON.stringify(payload));
+      } catch {
+      }
+    }
+
+    return res.json(payload);
   } catch (error) {
     return sendError(res, 500, 'Nie udalo sie pobrac listy uzytkownikow.', 'USERS_FETCH_FAILED');
   }
