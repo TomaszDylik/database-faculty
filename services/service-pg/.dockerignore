@@ -1,0 +1,69 @@
+# Dependencies
+node_modules
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Environment variables
+.env
+.env.*
+!.env.example
+
+# Local virtual environments
+.venv
+venv
+env
+virtualenv
+
+# Logs
+logs
+*.log
+
+# Runtime / process files
+pids
+*.pid
+*.seed
+*.pid.lock
+
+# Test & coverage
+coverage
+.nyc_output
+*.lcov
+__tests__
+**/*.test.js
+**/*.spec.js
+
+# IDE & editor
+.idea
+.vscode
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# Git
+.git
+.gitignore
+.gitattributes
+
+# Docker
+Dockerfile*
+docker-compose*
+.dockerignore
+
+# Documentation & misc
+README.md
+*.md
+.editorconfig
+.eslintrc*
+.prettierrc*
+
+# Build artifacts
+dist
+build
+.cache
+.tmp
+temp
+tmp
