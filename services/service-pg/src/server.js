@@ -6,6 +6,7 @@ const knexDb = require('./db/knex');
 const { end } = require('./db/pgPool');
 const prisma = require('./db/prisma');
 const { closeSequelize } = require('./db/sequelize');
+const { closeRedis } = require('./routes/users');
 
 const server = app.listen(port, () => {
   console.log(`service-pg listening on port ${port}`);
@@ -27,11 +28,12 @@ async function shutdown(signal) {
       knexDb.destroy(),
       end(),
       closeSequelize(),
+      closeRedis(),
     ]);
     process.exit(0);
   });
 
-  setTimeout(() => process.exit(1), 10000).unref();
+  setTimeout(() => process.exit(1), 14000).unref();
 }
 
 ['SIGINT', 'SIGTERM'].forEach((signal) => {

@@ -26,6 +26,13 @@ async function getRedisClient() {
   }
 }
 
+async function closeRedis() {
+  if (redisClient?.isOpen) {
+    await redisClient.quit();
+  }
+  redisClient = null;
+}
+
 async function fetchUsersFromDatabase() {
   const users = await prisma.user.findMany({
     orderBy: [
@@ -198,3 +205,4 @@ router.get('/users/:userId/conversations', async (req, res) => {
 });
 
 module.exports = router;
+module.exports.closeRedis = closeRedis;
