@@ -6,11 +6,13 @@ services:
     environment:
       POSTGRES_DB: ${POSTGRES_DB:-chat_app}
       POSTGRES_USER: ${POSTGRES_USER:-chat_user}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-chat_password}
-    ports:
-      - "${POSTGRES_PORT:-5432}:5432"
+      POSTGRES_PASSWORD_FILE: /run/secrets/postgres_password
+    secrets:
+      - postgres_password
     volumes:
       - postgres_data:/var/lib/postgresql/data
+    networks:
+      - private_net
     healthcheck:
       test: >-
         pg_isready -U ${POSTGRES_USER:-chat_user} -d ${POSTGRES_DB:-chat_app}
@@ -25,16 +27,18 @@ services:
     restart: unless-stopped
     environment:
       MONGO_INITDB_ROOT_USERNAME: ${MONGO_INITDB_ROOT_USERNAME:-chat_root}
-      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_INITDB_ROOT_PASSWORD:-chat_password}
+      MONGO_INITDB_ROOT_PASSWORD_FILE: /run/secrets/mongo_password
       MONGO_INITDB_DATABASE: ${MONGO_INITDB_DATABASE:-chat_messages}
-    ports:
-      - "${MONGO_PORT:-27017}:27017"
+    secrets:
+      - mongo_password
     volumes:
       - mongo_data:/data/db
+    networks:
+      - private_net
     healthcheck:
       test: >-
         mongosh --quiet --username ${MONGO_INITDB_ROOT_USERNAME:-chat_root}
-        --password ${MONGO_INITDB_ROOT_PASSWORD:-chat_password}
+        --password $$(cat /run/secrets/mongo_password)
         --authenticationDatabase admin
         --eval "quit(db.adminCommand('ping').ok ? 0 : 2)"
       interval: 5s
@@ -54,6 +58,9 @@ services:
       DATABASE_URL: ${DATABASE_URL:-postgresql://chat_user:chat_password@postgres:5432/chat_app?schema=public}
     ports:
       - "${SERVICE_PG_PORT:-8081}:8081"
+    networks:
+      - private_net
+      - public_net
     depends_on:
       postgres:
         condition: service_healthy
@@ -78,6 +85,9 @@ services:
       MONGO_URI: ${MONGO_URI:-mongodb://chat_root:chat_password@mongo:27017/chat_messages?authSource=admin}
     ports:
       - "${SERVICE_MONGO_PORT:-8082}:8082"
+    networks:
+      - private_net
+      - public_net
     depends_on:
       postgres:
         condition: service_healthy
@@ -104,6 +114,8 @@ services:
       SERVICE_MONGO_URL: ${SERVICE_MONGO_URL:-http://service-mongo:8082}
     ports:
       - "${API_GATEWAY_PORT:-8080}:8080"
+    networks:
+      - public_net
     depends_on:
       service-pg:
         condition: service_healthy
@@ -120,3 +132,13 @@ services:
 volumes:
   postgres_data: {}
   mongo_data: {}
+
+secrets:
+  postgres_password:
+    file: ./secrets/postgres_password.txt
+  mongo_password:
+    file: ./secrets/mongo_password.txt
+
+networks:
+  public_net: {}
+  private_net: {}
