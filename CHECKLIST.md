@@ -1,149 +1,155 @@
-# Checklist wdrożenia — Wymiana krótkich wiadomości
+# Checklist wdrożenia DevOps — Wymiana krótkich wiadomości
 
-Dokument potwierdza poprawność architektury kontenerowej projektu `database-faculty`: reverse proxy, API Gateway, mikroserwisy, bazy danych, Redis oraz opcjonalny profil deweloperski.
+Inżynierska specyfikacja realizacji wymagań infrastrukturalnych z arkusza ocen.  
+Legenda: `- [x]` spełnione i zweryfikowalne w repozytorium.
 
 ---
 
-## 1. Diagram architektury systemu
+## Diagram architektury
 
 ```mermaid
 flowchart TB
     Client[Klient / curl / przeglądarka]
+    Nginx[nginx :80<br/>reverse proxy]
+    Gateway[api-gateway :8080]
+    SvcPg[service-pg :8081]
+    SvcMongo[service-mongo :8082]
+    PG[(postgres<br/>named volume)]
+    Mongo[(mongo<br/>named volume)]
+    Redis[(redis)]
 
-    subgraph public_net [Sieć public_net]
-        Nginx[Nginx :80]
-        Gateway[api-gateway :8080]
-        Adminer[Adminer :8088<br/>profil dev]
+    subgraph public_net [public_net]
+        Nginx
+        Gateway
+        SvcPg
+        SvcMongo
     end
 
-    subgraph private_net [Sieć private_net]
-        ServicePg[service-pg :8081]
-        ServiceMongo[service-mongo :8082]
-        Postgres[(PostgreSQL :5432)]
-        Mongo[(MongoDB :27017)]
-        Redis[(Redis :6379)]
+    subgraph private_net [private_net]
+        PG
+        Mongo
+        Redis
+        SvcPg
+        SvcMongo
     end
 
     Client -->|HTTP :80| Nginx
-    Nginx -->|proxy_pass| Gateway
-    Gateway -->|HTTP| ServicePg
-    Gateway -->|HTTP| ServiceMongo
-    ServicePg --> Postgres
-    ServicePg --> Redis
-    ServiceMongo --> Mongo
-    ServiceMongo --> Postgres
-    Adminer -.->|GUI DB| Postgres
-    Adminer -.->|GUI DB| Mongo
+    Nginx --> Gateway
+    Gateway -->|/users, /api/pg/*| SvcPg
+    Gateway -->|/api/mongo/*| SvcMongo
+    SvcPg --> PG
+    SvcPg --> Redis
+    SvcMongo --> Mongo
+    SvcMongo --> PG
 ```
 
-**Przepływ żądań:** Cały ruch kliencki trafia na **Nginx** (port 80), który przekazuje go do **API Gateway**. Gateway agreguje healthchecki i routuje żądania biznesowe do mikroserwisów. `service-pg` obsługuje użytkowników i konwersacje (PostgreSQL + Redis), a `service-mongo` — wiadomości i dokumenty (MongoDB + synchronizacja metadanych w PostgreSQL).
+---
+
+## Opis usług
+
+| Usługa | Rola | Port na hoście | Sieć |
+| --- | --- | --- | --- |
+| `nginx` | Reverse proxy — jedyny publiczny punkt wejścia | `80` | `public_net` |
+| `api-gateway` | Agregacja `/health`, routing HTTP do mikroserwisów | — | `public_net` |
+| `service-pg` | Backend relacyjny: `users`, `conversations`; cache Redis | — | `public_net`, `private_net` |
+| `service-mongo` | Backend dokumentowy: `messages`; zapis hybrydowy PG+Mongo | — | `public_net`, `private_net` |
+| `postgres` | Baza relacyjna (metadane, wskaźniki wiadomości) | brak | `private_net` |
+| `mongo` | Baza dokumentowa (treść wiadomości) | brak | `private_net` |
+| `redis` | Cache listy użytkowników (TTL 60 s) | brak | `private_net` |
+| `adminer` | Narzędzie dev (profil `dev`) | `8088` | `public_net`, `private_net` |
 
 ---
 
-## 2. Opis usług
+## Wymagania infrastrukturalne
 
-| Usługa | Rola |
-| --- | --- |
-| **nginx** | Reverse proxy — jedyny publiczny punkt wejścia na porcie **80**; przekazuje żądania do `api-gateway`. |
-| **api-gateway** | Agregator healthchecków i router HTTP do mikroserwisów downstream (`service-pg`, `service-mongo`). |
-| **service-pg** | Mikroserwis relacyjny: użytkownicy, konwersacje, członkostwo; Prisma, Knex, pg, Sequelize; cache Redis. |
-| **service-mongo** | Mikroserwis dokumentowy: wiadomości, załączniki, agregacje MongoDB; operacje hybrydowe z PostgreSQL. |
-| **postgres** | Baza relacyjna — trwałe metadane (users, conversations, members, message_pointers). Dane w wolumenie `postgres_data`. |
-| **mongo** | Baza dokumentowa — treść wiadomości i metadane dokumentów. Dane w wolumenie `mongo_data`. |
-| **redis** | Cache in-memory (np. lista użytkowników) — przyspiesza odczyty w `service-pg`. |
-| **adminer** *(profil `dev`)* | Lekki panel WWW do podglądu PostgreSQL i MongoDB pod adresem `http://localhost:8088` — uruchamiany tylko w trybie deweloperskim. |
+- [x] **Minimum 4 usługi w `docker-compose.yml`** — 8 usług: `nginx`, `api-gateway`, `service-pg`, `service-mongo`, `postgres`, `mongo`, `redis`, `adminer` (profil `dev`). Weryfikacja: `docker compose config`, `docker compose ps`.
+
+- [x] **Własne Dockerfile dla usług aplikacyjnych** — `services/api-gateway/Dockerfile`, `services/service-pg/Dockerfile`, `services/service-mongo/Dockerfile`.
+
+- [x] **Multi-stage build** — `api-gateway` i `service-pg`: stage `builder` + `runner`; `service-mongo`: stage `deps` + `runner`.
+
+- [x] **`.dockerignore`** — `services/service-pg/.dockerignore` wyklucza `node_modules`, `.env`, logi, pliki testowe.
+
+- [x] **Aplikacja nie uruchamiona jako root** — `USER node` w Dockerfile `api-gateway` i `service-pg` (wymóg: minimum jeden Dockerfile).
+
+- [x] **Osobne sieci zewnętrzna i wewnętrzna** — `public_net` (nginx, gateway, mikroserwisy) i `private_net` (bazy, Redis, mikroserwisy). Ruch zewnętrzny przez `nginx` na porcie `80`.
+
+- [x] **Baza danych bez portu na hoście** — `postgres` i `mongo` nie definiują sekcji `ports:`; dostęp tylko z sieci Compose.
+
+- [x] **Named volume dla bazy danych** — `postgres_data` → `/var/lib/postgresql/data`, `mongo_data` → `/data/db`. Dane przetrwają `docker compose down` (bez `-v`).
+
+- [x] **`.env.example`** — zmienne dla Postgres, Mongo, Redis, portów serwisów i URL-i downstream (`SERVICE_PG_URL`, `SERVICE_MONGO_URL`).
+
+- [x] **Dane niepoufne przez zmienne środowiskowe; hasła poza kodem** — konfiguracja w `.env` / `environment:` w compose; brak haseł w Dockerfile i kodzie źródłowym.
+
+- [x] **Docker Compose secrets** — `secrets/postgres_password.txt`, `secrets/mongo_password.txt`; montowane jako `POSTGRES_PASSWORD_FILE`, `MONGO_INITDB_ROOT_PASSWORD_FILE`.
+
+- [x] **Healthchecki** — `pg_isready`, `mongosh ping`, `redis-cli ping`, HTTP `fetch` w serwisach Node (`/health`).
+
+- [x] **`depends_on: condition: service_healthy`** — łańcuch startu: DB/Redis → mikroserwisy → gateway → nginx.
+
+- [x] **Limity CPU i pamięci** — `deploy.resources.limits` na wszystkich głównych usługach (np. postgres `1 CPU / 512M`, service-pg `0.5 CPU / 512M`).
+
+- [x] **Rotacja logów** — `logging.driver: json-file`, `max-size: 10m`, `max-file: 3` na usługach aplikacyjnych i bazach.
+
+- [x] **Graceful shutdown (SIGTERM) + `stop_grace_period`** — `service-pg` i `service-mongo`: handler `SIGINT`/`SIGTERM` zamyka HTTP, `prisma.$disconnect()`, pule PG, Redis/Mongo; `stop_grace_period: 15s` w compose.
+
+- [x] **Profil deweloperski** — `adminer` z `profiles: [dev]`; uruchomienie: `docker compose --profile dev up -d`.
+
+- [x] **Główny zasób biznesowy + `/health`** — zasób `users`: `GET /users` (lista), tworzenie danych przez `POST /api/pg/conversations`; health: `GET /health` (gateway agreguje mikroserwisy).
+
+- [x] **Redis jako komponent wspierający** — `service-pg` cache'uje `GET /users` w Redis (`users_cache`, TTL 60 s); dowód: klucz widoczny w `redis-cli GET users_cache`.
+
+- [x] **Persystencja danych po restarcie** — named volumes; test: dodanie rekordu → `docker compose down && docker compose up -d` → odczyt rekordu.
+
+- [x] **Tagowanie obrazów** — obrazy budowane przez Compose: `docker compose images` → repozytoria `database-faculty-{service}`, tag `latest`; wersja semantyczna projektu: `package.json` → `1.0.0`.
 
 ---
 
-## 3. Instrukcja uruchomienia środowiska
+## Instrukcja uruchomienia
 
 ### Wymagania wstępne
 
-- Docker Desktop (lub Docker Engine) z obsługą `docker compose`
-- Pliki sekretów w katalogu `secrets/` (hasła do baz)
-- Plik `.env` na podstawie `.env.example`
+- Docker Desktop z `docker compose`
+- Pliki haseł: `secrets/postgres_password.txt`, `secrets/mongo_password.txt` (zgodne z `.env`)
 
-### Przygotowanie (jednorazowo)
-
-```powershell
-cd C:\Users\tomek\Desktop\database-faculty
-Copy-Item .env.example .env
-```
-
-Upewnij się, że istnieją pliki:
-
-- `secrets/postgres_password.txt`
-- `secrets/mongo_password.txt`
-
-### Uruchomienie podstawowe (bez profilu dev)
+### Start (PowerShell)
 
 ```powershell
+cd c:\Users\tomek\Desktop\database-faculty
+Copy-Item .env.example .env -ErrorAction SilentlyContinue
+docker compose config
 docker compose up -d --build
-```
-
-Po starcie kontenerów wykonaj migracje i seedy (wymagane do testu `/users`):
-
-```powershell
 docker compose exec -T service-pg npm run db:setup
 docker compose exec -T service-pg npm run knex:seed
 docker compose exec -T service-mongo npm run db:seed
-```
-
-Sprawdzenie statusu:
-
-```powershell
 docker compose ps
 ```
 
-### Uruchomienie z profilem deweloperskim (Adminer)
+### Oczekiwany wynik `docker compose ps`
 
-Profil `dev` dodaje kontener **Adminer** (panel baz danych na porcie **8088**):
-
-```powershell
-docker compose --profile dev up -d --build
-```
-
-Następnie wykonaj migracje i seedy jak powyżej.
-
-Adminer dostępny pod: **http://localhost:8088**
-
-Przykładowe logowanie do PostgreSQL w Adminerze:
-
-| Pole | Wartość |
-| --- | --- |
-| System | PostgreSQL |
-| Serwer | `postgres` |
-| Użytkownik | `chat_user` |
-| Hasło | *(z pliku `secrets/postgres_password.txt`)* |
-| Baza | `chat_app` |
-
-### Zatrzymanie środowiska
-
-```powershell
-docker compose down
-```
-
-Z profilem dev (zatrzymuje również Adminer):
-
-```powershell
-docker compose --profile dev down
-```
+Wszystkie usługi ze statusem `running` i `(healthy)` przy healthcheckach (poza `nginx`, który nie ma healthchecka).
 
 ---
 
-## 4. Komendy testowe `curl` (port 80 — Nginx)
+## Komendy testowe
 
-Wszystkie żądania trafiają przez Nginx na porcie **80**.
-
-### Healthcheck aplikacji
+### 1. Walidacja compose i status kontenerów
 
 ```powershell
-curl -s http://localhost/health
+docker compose config
+docker compose ps
 ```
 
-**Oczekiwany wynik:** status HTTP `200`, JSON z polem `"status": "ok"` oraz listą zależności (`service-pg`, `service-mongo`).
+**Oczekiwany wynik:** brak błędów parsowania YAML; min. 7 kontenerów `running` (`nginx`, `api-gateway`, `service-pg`, `service-mongo`, `postgres`, `mongo`, `redis`).
 
-Przykład:
+### 2. Healthcheck zagregowany
+
+```powershell
+curl.exe -s http://localhost/health | ConvertFrom-Json | ConvertTo-Json -Depth 5
+```
+
+**Oczekiwany wynik:** HTTP `200`, JSON:
 
 ```json
 {
@@ -156,114 +162,55 @@ Przykład:
 }
 ```
 
-### Lista użytkowników (wymóg biznesowy)
+### 3. Odczyt głównego zasobu — lista użytkowników
 
 ```powershell
-curl -s http://localhost/users
+curl.exe -s http://localhost/users | ConvertFrom-Json | ConvertTo-Json -Depth 3
 ```
 
-**Oczekiwany wynik:** status HTTP `200`, JSON z polami `total` i `users` (tablica użytkowników z seedów, np. Janek, Ania, Ola).
-
-Przykład:
+**Oczekiwany wynik:** HTTP `200`, `total` ≥ 3, tablica `users` z seedów (Janek, Ania, Ola):
 
 ```json
 {
   "total": 3,
   "users": [
-    { "id": "...", "email": "jan@example.com", "displayName": "Janek" },
-    { "id": "...", "email": "anna@example.com", "displayName": "Ania" },
-    { "id": "...", "email": "ola@example.com", "displayName": "Ola" }
+    { "email": "jan@example.com", "displayName": "Janek" },
+    { "email": "anna@example.com", "displayName": "Ania" },
+    { "email": "ola@example.com", "displayName": "Ola" }
   ]
 }
 ```
 
-> **Uwaga:** Przed testem `/users` upewnij się, że wykonano migracje i seedy (sekcja 3).
-
----
-
-## 5. Test przetrwania danych (named volumes)
-
-Celem testu jest udowodnienie, że dane w PostgreSQL i MongoDB przetrwają restart całego środowiska dzięki wolumenom `postgres_data` i `mongo_data`.
-
-### Krok 1 — Uruchom środowisko i załaduj dane
+### 4. Dowód działania Redis (cache)
 
 ```powershell
-docker compose up -d --build
-docker compose exec -T service-pg npm run db:setup
-docker compose exec -T service-pg npm run knex:seed
-docker compose exec -T service-mongo npm run db:seed
+docker compose exec -T redis redis-cli FLUSHALL
+curl.exe -s http://localhost/users > $null
+docker compose exec -T redis redis-cli GET users_cache
 ```
 
-### Krok 2 — Zapisz dodatkowy rekord w PostgreSQL
+**Oczekiwany wynik:** klucz `users_cache` zawiera JSON z `"total":3` i tablicą `users` — potwierdza zapis odpowiedzi w Redis po pierwszym żądaniu.
 
-Wstaw nowego użytkownika bezpośrednio do bazy (dowód trwałości wolumenu `postgres_data`):
+### 5. Sieci i brak ekspozycji baz
 
 ```powershell
-docker compose exec -T postgres psql -U chat_user -d chat_app -c "INSERT INTO users (id, email, display_name) VALUES ('44444444-4444-4444-8444-444444444444', 'test@example.com', 'TestUser') ON CONFLICT DO NOTHING;"
+docker compose ps --format "table {{.Name}}\t{{.Ports}}"
 ```
 
-### Krok 3 — Potwierdź obecność danych przed restartem
+**Oczekiwany wynik:** tylko `database-faculty-nginx` ma `0.0.0.0:80->80/tcp`; `postgres`, `mongo`, `redis` bez mapowania portów na hosta.
+
+### 6. Profil dev — Adminer
 
 ```powershell
-curl -s http://localhost/users
+docker compose --profile dev up -d adminer
 ```
 
-Zapisz wynik — lista powinna zawierać użytkownika `TestUser` (`test@example.com`) oraz użytkowników z seedów.
+**Oczekiwany wynik:** Adminer dostępny pod `http://localhost:8088`.
 
-Opcjonalnie sprawdź MongoDB (liczba dokumentów wiadomości):
+### 7. Obrazy aplikacyjne
 
 ```powershell
-docker compose exec -T mongo mongosh --quiet -u chat_root -p $(Get-Content secrets/mongo_password.txt) --authenticationDatabase admin chat_messages --eval "db.messages.countDocuments()"
+docker compose images
 ```
 
-### Krok 4 — Zatrzymaj i uruchom ponownie całe środowisko
-
-```powershell
-docker compose down
-docker compose up -d
-```
-
-> **Ważne:** Nie używaj flagi `-v` przy `docker compose down` — usunęłaby named volumes i zniszczyła dane testowe.
-
-### Krok 5 — Potwierdź przetrwanie danych po restarcie
-
-```powershell
-curl -s http://localhost/users
-```
-
-**Oczekiwany wynik:** Ten sam zestaw użytkowników co w kroku 3, w tym `TestUser` — dane przetrwały restart dzięki wolumenowi `postgres_data`.
-
-Ponowna weryfikacja MongoDB:
-
-```powershell
-docker compose exec -T mongo mongosh --quiet -u chat_root -p $(Get-Content secrets/mongo_password.txt) --authenticationDatabase admin chat_messages --eval "db.messages.countDocuments()"
-```
-
-Liczba dokumentów powinna być identyczna jak przed restartem — dane przetrwały dzięki wolumenowi `mongo_data`.
-
-### Krok 6 — Weryfikacja wolumenów (opcjonalnie)
-
-```powershell
-docker volume ls | Select-String "database-faculty"
-```
-
-Powinny być widoczne m.in.:
-
-- `database-faculty_postgres_data`
-- `database-faculty_mongo_data`
-
----
-
-## Podsumowanie spełnionych wymogów architektonicznych
-
-| Wymaganie | Status |
-| --- | --- |
-| `docker compose up` bez kroków ręcznych (kontenery) | ✅ |
-| Multi-stage Dockerfile, healthchecki, `depends_on: service_healthy` | ✅ |
-| Min. 2 mikroserwisy Node w osobnych kontenerach | ✅ (`service-pg`, `service-mongo`) |
-| API Gateway + Nginx reverse proxy | ✅ |
-| PostgreSQL + MongoDB + Redis | ✅ |
-| Named volumes (`postgres_data`, `mongo_data`) | ✅ |
-| Profil deweloperski Docker (`--profile dev`) + Adminer | ✅ |
-| Testy `curl` przez port 80 (`/health`, `/users`) | ✅ |
-| Test przetrwania danych po `down` / `up` | ✅ |
+**Oczekiwany wynik:** wiersze dla `database-faculty-api-gateway`, `database-faculty-service-pg`, `database-faculty-service-mongo` z tagiem `latest`.
