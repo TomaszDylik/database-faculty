@@ -2,8 +2,8 @@ FROM node:20-alpine AS builder
 
 WORKDIR /app
 
-COPY package.json package-lock.json ./
-RUN npm ci && npm cache clean --force
+COPY package*.json ./
+RUN npm install && npm cache clean --force
 
 COPY src ./src
 
@@ -13,8 +13,8 @@ WORKDIR /app
 
 ENV NODE_ENV=production
 
-COPY --chown=node:node package.json package-lock.json ./
-RUN npm ci --only=production && npm cache clean --force
+COPY --chown=node:node package*.json ./
+RUN npm install --only=production && npm cache clean --force
 
 COPY --chown=node:node --from=builder /app/src ./src
 

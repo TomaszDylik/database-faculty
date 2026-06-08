@@ -213,17 +213,16 @@ services:
     depends_on:
       api-gateway:
         condition: service_healthy
-    command: >
-      sh -c "printf '%s\n'
-      'server {'
-      '    listen 80;'
-      '    location / {'
-      '        proxy_pass http://api-gateway:8080;'
-      '        proxy_set_header Host $$host;'
-      '        proxy_set_header X-Real-IP $$remote_addr;'
-      '    }'
-      '}'
-      > /etc/nginx/conf.d/default.conf
+    command: /bin/sh -c "echo 'server { listen 80; location / { proxy_pass http://api-gateway:8080; proxy_set_header Host $$host; proxy_set_header X-Real-IP $$remote_addr; } }' > /etc/nginx/conf.d/default.conf && nginx -g 'daemon off;'"
+      /bin/sh -c "echo '
+      server { 
+        listen 80; 
+        location / { 
+          proxy_pass http://api-gateway:8080; 
+          proxy_set_header Host $$host; 
+          proxy_set_header X-Real-IP $$remote_addr; 
+        } 
+      }' > /etc/nginx/conf.d/default.conf 
       && nginx -g 'daemon off;'"
 
   adminer:
