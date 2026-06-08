@@ -1,13 +1,27 @@
-FROM node:20-alpine AS deps
+FROM node:20-alpine AS builder
+
 WORKDIR /app
-COPY package.json ./
-RUN npm install && npm cache clean --force
+
+COPY package.json package-lock.json ./
+RUN npm ci && npm cache clean --force
+
+COPY src ./src
 
 FROM node:20-alpine AS runner
+
 WORKDIR /app
+
 ENV NODE_ENV=production
-COPY --from=deps /app/node_modules ./node_modules
-COPY package.json ./
-COPY src ./src
+
+COPY --chown=node:node package.json package-lock.json ./
+RUN npm ci --only=production && npm cache clean --force
+
+COPY --chown=node:node --from=builder /app/src ./src
+
+RUN chown -R node:node /app
+
+USER node
+
 EXPOSE 8080
+
 CMD ["npm", "run", "start"]

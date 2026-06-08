@@ -100,8 +100,6 @@ services:
       PORT: 8081
       DATABASE_URL: ${DATABASE_URL:-postgresql://chat_user:chat_password@postgres:5432/chat_app?schema=public}
       REDIS_URL: ${REDIS_URL:-redis://redis:6379}
-    ports:
-      - "${SERVICE_PG_PORT:-8081}:8081"
     networks:
       - private_net
       - public_net
@@ -140,8 +138,6 @@ services:
       PORT: 8082
       DATABASE_URL: ${DATABASE_URL:-postgresql://chat_user:chat_password@postgres:5432/chat_app?schema=public}
       MONGO_URI: ${MONGO_URI:-mongodb://chat_root:chat_password@mongo:27017/chat_messages?authSource=admin}
-    ports:
-      - "${SERVICE_MONGO_PORT:-8082}:8082"
     networks:
       - private_net
       - public_net
@@ -180,8 +176,6 @@ services:
       PORT: 8080
       SERVICE_PG_URL: ${SERVICE_PG_URL:-http://service-pg:8081}
       SERVICE_MONGO_URL: ${SERVICE_MONGO_URL:-http://service-mongo:8082}
-    ports:
-      - "${API_GATEWAY_PORT:-8080}:8080"
     networks:
       - public_net
     depends_on:
