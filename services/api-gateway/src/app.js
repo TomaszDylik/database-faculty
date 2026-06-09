@@ -1,4 +1,5 @@
 const express = require('express');
+const { auth } = require('express-oauth2-jwt-bearer');
 
 const healthRouter = require('./routes/health');
 
@@ -6,10 +7,25 @@ const app = express();
 
 app.use(express.json());
 
+const jwtCheck = auth({
+  issuerBaseURL: 'http://localhost:8080/realms/chat-realm',
+  audience: false,
+});
+
+function requireAdmin(req, res, next) {
+  const roles = req.auth?.payload?.realm_access?.roles ?? [];
+  if (!roles.includes('admin')) {
+    return res.status(403).json({ error: 'Forbidden' });
+  }
+  next();
+}
+
 const SERVICE_PG_URL = process.env.SERVICE_PG_URL || 'http://service-pg:8081';
 const SERVICE_MONGO_URL = process.env.SERVICE_MONGO_URL || 'http://service-mongo:8082';
 
-app.get('/', (_req, res) => {
+app.use(healthRouter);
+
+app.get('/', jwtCheck, (_req, res) => {
   res.json({
     service: 'api-gateway',
     message: 'Gateway działa operacyjnie! Ruch jest przekazywany do mikroserwisów.',
@@ -22,16 +38,19 @@ app.get('/', (_req, res) => {
   });
 });
 
-app.use(healthRouter);
-
-app.use('/users', async (req, res) => {
+app.use('/users', jwtCheck, (req, res, next) => {
+  if (req.method === 'POST') {
+    return requireAdmin(req, res, next);
+  }
+  next();
+}, async (req, res) => {
   try {
     const response = await fetch(`${SERVICE_PG_URL}/users`, {
       method: req.method,
       headers: {
         'Content-Type': 'application/json',
       },
-      body: ['GET', 'HEAD'].includes(req.method) ? undefined : JSON.stringify(req.body)
+      body: ['GET', 'HEAD'].includes(req.method) ? undefined : JSON.stringify(req.body),
     });
 
     const data = await response.json().catch(() => ({}));
@@ -42,13 +61,13 @@ app.use('/users', async (req, res) => {
   }
 });
 
-app.use('/api/pg', async (req, res) => {
+app.use('/api/pg', jwtCheck, async (req, res) => {
   try {
     const url = `${SERVICE_PG_URL}${req.url === '/' ? '' : req.url}`;
     const response = await fetch(url, {
       method: req.method,
       headers: { 'Content-Type': 'application/json' },
-      body: ['GET', 'HEAD'].includes(req.method) ? undefined : JSON.stringify(req.body)
+      body: ['GET', 'HEAD'].includes(req.method) ? undefined : JSON.stringify(req.body),
     });
 
     const data = await response.json().catch(() => ({}));
@@ -58,13 +77,13 @@ app.use('/api/pg', async (req, res) => {
   }
 });
 
-app.use('/api/mongo', async (req, res) => {
+app.use('/api/mongo', jwtCheck, async (req, res) => {
   try {
     const url = `${SERVICE_MONGO_URL}${req.url === '/' ? '' : req.url}`;
     const response = await fetch(url, {
       method: req.method,
       headers: { 'Content-Type': 'application/json' },
-      body: ['GET', 'HEAD'].includes(req.method) ? undefined : JSON.stringify(req.body)
+      body: ['GET', 'HEAD'].includes(req.method) ? undefined : JSON.stringify(req.body),
     });
 
     const data = await response.json().catch(() => ({}));
