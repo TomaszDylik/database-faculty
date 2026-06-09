@@ -177,6 +177,10 @@ services:
       PORT: 8080
       SERVICE_PG_URL: ${SERVICE_PG_URL:-http://service-pg:8081}
       SERVICE_MONGO_URL: ${SERVICE_MONGO_URL:-http://service-mongo:8082}
+      ISSUER_BASE_URL: ${ISSUER_BASE_URL:-http://localhost:8080/realms/chat-realm}
+      JWT_AUDIENCE: ${JWT_AUDIENCE:-account}
+    extra_hosts:
+      - "localhost:host-gateway"
     networks:
       - public_net
     depends_on:
@@ -209,22 +213,13 @@ services:
     restart: unless-stopped
     ports:
       - "80:80"
+    volumes:
+      - ./nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
     networks:
       - public_net
     depends_on:
       api-gateway:
         condition: service_healthy
-    command: /bin/sh -c "echo 'server { listen 80; location / { proxy_pass http://api-gateway:8080; proxy_set_header Host $$host; proxy_set_header X-Real-IP $$remote_addr; } }' > /etc/nginx/conf.d/default.conf && nginx -g 'daemon off;'"
-      /bin/sh -c "echo '
-      server { 
-        listen 80; 
-        location / { 
-          proxy_pass http://api-gateway:8080; 
-          proxy_set_header Host $$host; 
-          proxy_set_header X-Real-IP $$remote_addr; 
-        } 
-      }' > /etc/nginx/conf.d/default.conf 
-      && nginx -g 'daemon off;'"
 
   adminer:
     image: adminer:latest
