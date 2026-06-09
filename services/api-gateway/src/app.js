@@ -1,16 +1,33 @@
 const express = require('express');
+const cors = require('cors');
 const { auth } = require('express-oauth2-jwt-bearer');
 
 const healthRouter = require('./routes/health');
 
 const app = express();
 
+const corsOptions = {
+  origin: 'http://localhost:5173',
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
+};
+
+app.use(cors(corsOptions));
+app.options('*', cors(corsOptions));
 app.use(express.json());
 
 const jwtCheck = auth({
-  issuerBaseURL: 'http://localhost:8080/realms/chat-realm',
-  audience: false,
+  issuerBaseURL: 'http://keycloak:8080/realms/chat-realm',
+  issuer: 'http://localhost:8080/realms/chat-realm',
+  audience: 'react-frontend',
 });
+
+function jwtUnlessOptions(req, res, next) {
+  if (req.method === 'OPTIONS') {
+    return next();
+  }
+  return jwtCheck(req, res, next);
+}
 
 function requireAdmin(req, res, next) {
   const roles = req.auth?.payload?.realm_access?.roles ?? [];
@@ -25,7 +42,7 @@ const SERVICE_MONGO_URL = process.env.SERVICE_MONGO_URL || 'http://service-mongo
 
 app.use(healthRouter);
 
-app.get('/', jwtCheck, (_req, res) => {
+app.get('/', jwtUnlessOptions, (_req, res) => {
   res.json({
     service: 'api-gateway',
     message: 'Gateway działa operacyjnie! Ruch jest przekazywany do mikroserwisów.',
@@ -38,7 +55,7 @@ app.get('/', jwtCheck, (_req, res) => {
   });
 });
 
-app.use('/users', jwtCheck, (req, res, next) => {
+app.use('/users', jwtUnlessOptions, (req, res, next) => {
   if (req.method === 'POST') {
     return requireAdmin(req, res, next);
   }
@@ -61,7 +78,7 @@ app.use('/users', jwtCheck, (req, res, next) => {
   }
 });
 
-app.use('/api/pg', jwtCheck, async (req, res) => {
+app.use('/api/pg', jwtUnlessOptions, async (req, res) => {
   try {
     const url = `${SERVICE_PG_URL}${req.url === '/' ? '' : req.url}`;
     const response = await fetch(url, {
@@ -77,7 +94,7 @@ app.use('/api/pg', jwtCheck, async (req, res) => {
   }
 });
 
-app.use('/api/mongo', jwtCheck, async (req, res) => {
+app.use('/api/mongo', jwtUnlessOptions, async (req, res) => {
   try {
     const url = `${SERVICE_MONGO_URL}${req.url === '/' ? '' : req.url}`;
     const response = await fetch(url, {
@@ -95,6 +112,14 @@ app.use('/api/mongo', jwtCheck, async (req, res) => {
 
 app.use((_req, res) => {
   res.status(404).json({ error: 'Not found - API Gateway nie odnalazł ścieżki' });
+});
+
+app.use((err, req, res, next) => {
+  if (err.name === 'UnauthorizedError') {
+    console.error('Błąd autoryzacji JWT:', err.message);
+    return res.status(401).json({ error: 'Unauthorized', details: err.message });
+  }
+  next(err);
 });
 
 module.exports = app;
